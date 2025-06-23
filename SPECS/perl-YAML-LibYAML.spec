@@ -8,12 +8,15 @@
 Name:           perl-YAML-LibYAML
 Epoch:          1
 Version:        0.82
-Release:        6%{?dist}
+Release:        6.1%{?dist}
 Summary:        Perl YAML Serialization using XS and libyaml
 License:        GPL+ or Artistic
 URL:            https://metacpan.org/release/YAML-LibYAML
 Source0:        https://cpan.metacpan.org/modules/by-module/YAML/YAML-LibYAML-%{version}.tar.gz
 Patch0:         YAML-LibYAML-0.79-Unbundled-libyaml.patch
+# Use 3-arg form of open in LoadFile (CVE-2025-40908)
+Patch1:         YAML-LibYAML-0.903-Use-3-arg-form-of-open-in-LoadFile.patch
+Patch2:         YAML-LibYAML-0.903-regress-test-for-3args-open.patch
 
 # Build
 BuildRequires:  coreutils
@@ -43,11 +46,13 @@ BuildRequires:  perl(XSLoader)
 BuildRequires:  perl(B)
 BuildRequires:  perl(blib)
 BuildRequires:  perl(Carp)
+BuildRequires:  perl(Cwd)
 BuildRequires:  perl(Data::Dumper)
 BuildRequires:  perl(Devel::Peek)
 BuildRequires:  perl(Encode)
 BuildRequires:  perl(File::Find)
 BuildRequires:  perl(File::Path)
+BuildRequires:  perl(File::Temp)
 BuildRequires:  perl(Filter::Util::Call)
 BuildRequires:  perl(FindBin)
 BuildRequires:  perl(IO::File)
@@ -71,22 +76,45 @@ Requires:       libyaml >= 0.2.4
 
 # Avoid provides for perl shared objects
 %{?perl_default_filter}
+# Filter modules bundled for tests
+%global __provides_exclude_from %{?__provides_exclude_from:%__provides_exclude_from|}^%{_libexecdir}
+%global __requires_exclude %{?__requires_exclude:%__requires_exclude|}^perl\\(Spiffy\\)
+%global __requires_exclude %{?__requires_exclude:%__requires_exclude|}^perl\\(TestYAML.*\\)
+%global __requires_exclude %{?__requires_exclude:%__requires_exclude|}^perl\\(Test::Base.*\\)
 
 %description
 Kirill Siminov's "libyaml" is arguably the best YAML implementation. The C
 library is written precisely to the YAML 1.1 specification. It was originally
 bound to Python and was later bound to Ruby.
 
+%package tests
+Summary:        Tests for %{name}
+Requires:       %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
+Requires:       perl-Test-Harness
+Requires:       perl(Filter::Util::Call)
+
+%description tests
+Tests from %{name}. Execute them
+with "%{_libexecdir}/%{name}/test".
+
 %prep
 %setup -q -n YAML-LibYAML-%{version}
 # Unbundled libyaml, the source files are the same as in libyaml-0.2.4
 # It was determined by comparing commits in upstream repo:
 # https://github.com/yaml/libyaml/
-%patch0 -p1 -b .orig
+%patch -P0 -p1 -b .orig
 for file in api.c dumper.c emitter.c loader.c parser.c reader.c scanner.c \
     writer.c yaml.h yaml_private.h; do
     rm LibYAML/$file
     sed -i -e "/^LibYAML\/$file/d" MANIFEST
+done
+%patch -P1 -p1
+%patch -P2 -p1
+
+# Help generators to recognize Perl scripts
+for F in t/*.t; do
+    perl -i -MConfig -ple 'print $Config{startperl} if $. == 1 && !s{\A#!.*perl\b}{$Config{startperl}}' "$F"
+    chmod +x "$F"
 done
 
 %build
@@ -98,7 +126,32 @@ perl Makefile.PL INSTALLDIRS=vendor OPTIMIZE="%{optflags}" NO_PACKLIST=1 NO_PERL
 find %{buildroot} -type f -name '*.bs' -empty -delete
 %{_fixperms} -c %{buildroot}
 
+# Install tests
+mkdir -p %{buildroot}%{_libexecdir}/%{name}
+cp -a t inc %{buildroot}%{_libexecdir}/%{name}
+# It needs libraries in lib/ not in system directories
+rm %{buildroot}%{_libexecdir}/%{name}/t/000-require-modules.t
+# Remove author test
+rm %{buildroot}%{_libexecdir}/%{name}/t/author-pod-syntax.t
+# Don't use blib
+perl -i -pe 's{^use blib;}{#use blib;}' %{buildroot}%{_libexecdir}/%{name}/t/TestYAML.pm
+perl -i -pe 's{^use_blib: 1}{use_blib: 0}' %{buildroot}%{_libexecdir}/%{name}/t/yaml_tests.yaml
+cat > %{buildroot}%{_libexecdir}/%{name}/test << 'EOF'
+#!/bin/bash
+set -e
+# Some tests write into temporary files/directories. The solution is to
+# copy the tests into a writable directory and execute them from there.
+DIR=$(mktemp -d)
+pushd "$DIR"
+cp -a %{_libexecdir}/%{name}/* ./
+prove -I . -I inc -j "$(getconf _NPROCESSORS_ONLN)"
+popd
+rm -rf "$DIR"
+EOF
+chmod +x %{buildroot}%{_libexecdir}/%{name}/test
+
 %check
+export HARNESS_OPTIONS=j$(perl -e 'if ($ARGV[0] =~ /.*-j([0-9][0-9]*).*/) {print $1} else {print 1}' -- '%{?_smp_mflags}')
 make test
 
 %files
@@ -110,7 +163,13 @@ make test
 %{_mandir}/man3/YAML::XS.3*
 %{_mandir}/man3/YAML::XS::LibYAML.3*
 
+%files tests
+%{_libexecdir}/%{name}
+
 %changelog
+* Tue Jun 03 2025 Jitka Plesnikova <jplesnik@redhat.com> - 1:0.82-6.1
+- Use 3-arg form of open in LoadFile (CVE-2025-40908)
+
 * Mon Aug 09 2021 Mohan Boddu <mboddu@redhat.com> - 1:0.82-6
 - Rebuilt for IMA sigs, glibc 2.34, aarch64 flags
   Related: rhbz#1991688
