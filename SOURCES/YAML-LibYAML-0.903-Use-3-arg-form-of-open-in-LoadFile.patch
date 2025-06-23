@@ -1,0 +1,27 @@
+From 5fe9daed726c06900c3cd41a739460057bec6dc3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Tina=20M=C3=BCller?= <cpan2@tinita.de>
+Date: Wed, 29 Jan 2025 21:17:28 +0100
+Subject: [PATCH] Use 3-arg form of open in LoadFile
+
+Fixes https://github.com/ingydotnet/yaml-libyaml-pm/issues/120
+
+Otherwise `$filename = ">file.yaml"; LoadFile($filename)` will truncate a file.
+
+One should check untrusted filenames in any case, though.
+---
+ lib/YAML/XS.pm | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/YAML/XS.pm b/lib/YAML/XS.pm
+index 66ff5ba..e8df694 100644
+--- a/lib/YAML/XS.pm
++++ b/lib/YAML/XS.pm
+@@ -54,7 +54,7 @@ sub LoadFile {
+         $IN = $filename;
+     }
+     else {
+-        open $IN, $filename
++        open $IN, '<', $filename
+           or die "Can't open '$filename' for input:\n$!";
+     }
+     return YAML::XS::LibYAML::Load(do { local $/; local $_ = <$IN> });

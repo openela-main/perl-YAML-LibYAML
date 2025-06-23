@@ -1,0 +1,76 @@
+From d287c87f41d5b0438d94d8fad1f285d17530fc69 Mon Sep 17 00:00:00 2001
+From: Shlomi Fish <shlomif@shlomifish.org>
+Date: Fri, 7 Feb 2025 15:08:56 +0200
+Subject: [PATCH] regress test for GH#120. 3args open.
+
+---
+ Makefile.PL        |  4 ++++
+ t/security-gh120.t | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 32 insertions(+)
+ create mode 100644 t/security-gh120.t
+
+#diff --git a/Makefile.PL b/Makefile.PL
+#index 49a917d..371533a 100644
+#--- a/Makefile.PL
+#+++ b/Makefile.PL
+#@@ -26,10 +26,12 @@ my %WriteMakefileArgs = (
+#     "warnings" => 0
+#   },
+#   "TEST_REQUIRES" => {
+#+    "Cwd" => 0,
+#     "Devel::Peek" => 0,
+#     "Encode" => 0,
+#     "File::Find" => 0,
+#     "File::Path" => 0,
+#+    "File::Temp" => 0,
+#     "FindBin" => 0,
+#     "IO::File" => 0,
+#     "IO::Pipe" => 0,
+#@@ -50,11 +52,13 @@ my %WriteMakefileArgs = (
+# 
+# my %FallbackPrereqs = (
+#   "B::Deparse" => 0,
+#+  "Cwd" => 0,
+#   "Devel::Peek" => 0,
+#   "Encode" => 0,
+#   "Exporter" => 0,
+#   "File::Find" => 0,
+#   "File::Path" => 0,
+#+  "File::Temp" => 0,
+#   "FindBin" => 0,
+#   "IO::File" => 0,
+#   "IO::Pipe" => 0,
+diff --git a/t/security-gh120.t b/t/security-gh120.t
+new file mode 100644
+index 0000000..1102550
+--- /dev/null
++++ b/t/security-gh120.t
+@@ -0,0 +1,28 @@
++use FindBin '$Bin';
++use lib $Bin;
++use TestYAMLTests tests => 1;
++
++# https://github.com/ingydotnet/yaml-libyaml-pm/issues/120
++#
++
++use YAML::XS   qw/DumpFile LoadFile/;
++use File::Temp qw/ tempdir /;
++
++use Cwd qw/ getcwd /;
++
++my $PWD = getcwd();
++my $dir = tempdir( CLEANUP => 1 );
++
++chdir($dir);
++
++my $fn = "dont-clobber-me";
++open my $fh, ">", ">$fn";
++$fh->print( "$fn\n" x 500 );
++close($fh);
++
++my $ret = LoadFile(">$fn");
++
++my $size = ( -s ">$fn" );
++ok( scalar( $size > 2000 ), "file was not clobbered; size = '$size'" );
++
++chdir($PWD);
