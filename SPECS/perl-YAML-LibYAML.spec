@@ -8,7 +8,7 @@
 Name:           perl-YAML-LibYAML
 Epoch:          1
 Version:        0.82
-Release:        6.1%{?dist}
+Release:        7%{?dist}
 Summary:        Perl YAML Serialization using XS and libyaml
 License:        GPL+ or Artistic
 URL:            https://metacpan.org/release/YAML-LibYAML
@@ -167,7 +167,7 @@ make test
 %{_libexecdir}/%{name}
 
 %changelog
-* Tue Jun 03 2025 Jitka Plesnikova <jplesnik@redhat.com> - 1:0.82-6.1
+* Tue Jun 03 2025 Jitka Plesnikova <jplesnik@redhat.com> - 1:0.82-7
 - Use 3-arg form of open in LoadFile (CVE-2025-40908)
 
 * Mon Aug 09 2021 Mohan Boddu <mboddu@redhat.com> - 1:0.82-6
